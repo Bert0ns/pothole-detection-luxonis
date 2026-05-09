@@ -21,8 +21,6 @@ class PotholeDetector(dai.node.HostNode):
 
         self._min_depth = 200  # 20cm
         self._max_depth = 5000  # 5m
-
-        self._depth_threshold_mm = 30  # A change of 3 cm to count as a pothole
         self._min_contour_area = 500  # Ignore tiny noise
 
     def build(
@@ -93,27 +91,33 @@ class PotholeDetector(dai.node.HostNode):
                 max_depth = np.max(roi_depth[roi_valid])
                 diff_mm = max_depth - baseline_depth
 
-                if diff_mm >= self._depth_threshold_mm:
-                    # 3. Severity scoring: based on depth difference
-                    severity = min(10, max(1, int((diff_mm - 30) / 10) + 1))
-                    color = (1, 0.2, 0.2, 1)  # Red-ish for pothole
+                # 3. Severity scoring: based on depth difference
+                severity = min(10, max(1, int((diff_mm - 30) / 10) + 1))
+                
+                # Colors based on severity (Yellow-ish for low, Red for high)
+                if severity < 4:
+                    color = (1, 1, 0, 1)  # Yellow
+                elif severity < 8:
+                    color = (1, 0.5, 0, 1) # Orange
+                else:
+                    color = (1, 0.1, 0.1, 1)  # Red
+                annotations_builder.draw_rectangle(
+                    top_left=(det.xmin, det.ymin),
+                    bottom_right=(det.xmax, det.ymax),
+                    outline_color=color,
+                    thickness=2,
+                )
 
-                    annotations_builder.draw_rectangle(
-                        top_left=(det.xmin, det.ymin),
-                        bottom_right=(det.xmax, det.ymax),
-                        outline_color=color,
-                        thickness=2,
-                    )
+                text = f"Severity: {severity}/10 | Depth: {diff_mm:.0f} mm"
+                annotations_builder.draw_text(
+                    text=text,
+                    position=(det.xmin, max(0.01, det.ymin - 0.02)),
+                    color=color,
+                    background_color=(0, 0, 0, 0.7),
+                    size=4,
+                )
 
-                    text = f"Sev: {severity}/10 Diff: {diff_mm:.0f}mm"
-                    annotations_builder.draw_text(
-                        text=text,
-                        position=(det.xmin, max(0.01, det.ymin - 0.02)),
-                        color=color,
-                        background_color=(1, 1, 1, 0.7),
-                        size=4,
-                    )
-
+                    
         annotations_builder.draw_text(
             text=f"Baseline Depth: {baseline_depth:.0f} mm",
             position=(0.02, 0.05),
