@@ -26,22 +26,42 @@ class PotholeDetector(dai.node.HostNode):
         self._min_contour_area = 500  # Ignore tiny noise
 
     def build(
-        self, disparity_frames: dai.Node.Output, depth_frames: dai.Node.Output
+        self,
+        disparity_frames: dai.Node.Output,
+        depth_frames: dai.Node.Output,
+        detections: dai.Node.Output,
     ) -> "PotholeDetector":
-        self.link_args(disparity_frames, depth_frames)
+        self.link_args(disparity_frames, depth_frames, detections)
         return self
 
-    def process(self, disparity: dai.ImgFrame, depth_frame: dai.ImgFrame) -> None:
+    def process(
+        self,
+        disparity: dai.ImgFrame,
+        depth_frame: dai.ImgFrame,
+        in_det: dai.SpatialImgDetections,
+    ) -> None:
         depth = depth_frame.getFrame()
+        dets = in_det.detections
 
-        # 1. Establish baseline depth (flat road)
-        # For a camera pointing straight down at a flat surface, the median
-        # depth is likely the road surface.
+        height, width = depth.shape
+        background_mask = np.ones((height, width), dtype=bool)
+
+        for det in dets:
+            x1 = int(det.xmin * width)
+            y1 = int(det.ymin * height)
+            x2 = int(det.xmax * width)
+            y2 = int(det.ymax * height)
+            background_mask[
+                max(0, y1) : min(height, y2), max(0, x1) : min(width, x2)
+            ] = False
+
+        # 1. Establish baseline depth (flat road) explicitly ignoring the detected objects
         valid_mask = (depth > self._min_depth) & (depth < self._max_depth)
+        bg_valid = background_mask & valid_mask
 
         baseline_depth = 0
-        if valid_mask.any():
-            baseline_depth = np.median(depth[valid_mask])
+        if bg_valid.any():
+            baseline_depth = np.median(depth[bg_valid])
 
         annotations_builder = AnnotationHelper()
         if baseline_depth == 0:
@@ -57,65 +77,38 @@ class PotholeDetector(dai.node.HostNode):
             self.passthrough.send(disparity)
             return
 
-        # 2. Detect potholes (areas deeper than baseline + threshold)
-        pothole_mask = (
-            depth > (baseline_depth + self._depth_threshold_mm)
-        ) & valid_mask
+        # 2. Extract bounding boxes from YOLO and calculate severity
+        for det in dets:
+            x1 = int(det.xmin * width)
+            y1 = int(det.ymin * height)
+            x2 = int(det.xmax * width)
+            y2 = int(det.ymax * height)
 
-        # Convert to 8-bit for contour finding
-        pothole_mask_8u = (pothole_mask * 255).astype(np.uint8)
+            roi_depth = depth[max(0, y1) : min(height, y2), max(0, x1) : min(width, x2)]
+            roi_valid = valid_mask[
+                max(0, y1) : min(height, y2), max(0, x1) : min(width, x2)
+            ]
 
-        # Optionally perform morphological ops to clean up noise
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        pothole_mask_8u = cv2.morphologyEx(pothole_mask_8u, cv2.MORPH_OPEN, kernel)
-        pothole_mask_8u = cv2.morphologyEx(pothole_mask_8u, cv2.MORPH_CLOSE, kernel)
+            if roi_valid.any():
+                max_depth = np.max(roi_depth[roi_valid])
+                diff_mm = max_depth - baseline_depth
 
-        contours, _ = cv2.findContours(
-            pothole_mask_8u, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-
-        height, width = depth.shape
-
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area > self._min_contour_area:
-                x, y, w, h = cv2.boundingRect(cnt)
-
-                # Compute max depth inside this contour
-                roi_depth = depth[y : y + h, x : x + w]
-                roi_mask = pothole_mask[y : y + h, x : x + w]
-
-                if roi_mask.any():
-                    max_depth = np.max(roi_depth[roi_mask])
-                    diff_mm = max_depth - baseline_depth
-
-                    # 3. Severity scoring: based on depth difference and area
-                    # simple heuristic: 30mm = Low (1), > 120mm = High (10)
+                if diff_mm >= self._depth_threshold_mm:
+                    # 3. Severity scoring: based on depth difference
                     severity = min(10, max(1, int((diff_mm - 30) / 10) + 1))
-
                     color = (1, 0.2, 0.2, 1)  # Red-ish for pothole
 
-                    # draw bounding box
-                    rel_xmin = x / width
-                    rel_ymin = y / height
-                    rel_xmax = (x + w) / width
-                    rel_ymax = (y + h) / height
-
                     annotations_builder.draw_rectangle(
-                        top_left=(rel_xmin, rel_ymin),
-                        bottom_right=(rel_xmax, rel_ymax),
+                        top_left=(det.xmin, det.ymin),
+                        bottom_right=(det.xmax, det.ymax),
                         outline_color=color,
                         thickness=2,
                     )
 
-                    # draw text
                     text = f"Sev: {severity}/10 Diff: {diff_mm:.0f}mm"
                     annotations_builder.draw_text(
                         text=text,
-                        position=(
-                            rel_xmin,
-                            max(0.01, rel_ymin - 0.02),
-                        ),  # Ensure it stays in view
+                        position=(det.xmin, max(0.01, det.ymin - 0.02)),
                         color=color,
                         background_color=(1, 1, 1, 0.7),
                         size=4,

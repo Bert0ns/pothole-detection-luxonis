@@ -1,0 +1,16 @@
+yolov6_nano_r2_coco.RVC4.yaml:
+  hash: a26d1eee8dd89aaa68faf9912e46ddee
+  model_id: aim_RFFiRGVUcFAVE894kxRbRm
+  model_version_id: aimv_He32P9Hf4x3ug9dhU3agBa
+  model_instance_id: aimi_V76LXDKoqBJQktFW9FULsa
+  downloaded_files:
+    - yolov6n-r2-288x512.rvc4.tar.xz
+  folder_name: f921dd9cf02bd671337d7396b6846ba5f190c4d1
+pothole_2.RVC4.yaml:
+  hash: 9d51c82fe57a8d2bec9636785ce41ff5
+  model_id: aim_AGZoJiifZ7whXqFSj3H4ze
+  model_version_id: aimv_AGZoJiviwdMAyM3bFdDrES
+  model_instance_id: aimi_AGZoJmz3dWxGGNHo6zDBJ3
+  downloaded_files:
+    - Yolov8-fintuned-on-potholes.rvc4.tar.xz
+  folder_name: b47caf2525e42e52b6c15eb1bb07592fafa4706c

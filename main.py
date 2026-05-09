@@ -10,6 +10,8 @@ _, args = initialize_argparser()
 
 visualizer = dai.RemoteConnection(httpPort=8082)
 device = dai.Device(dai.DeviceInfo(args.device)) if args.device else dai.Device()
+platform = device.getPlatform().name
+print(f"Platform: {platform}")
 
 # Enable IR projector and floodlight to get accurate depth on textureless asphalt
 try:
@@ -21,20 +23,28 @@ except Exception as e:
     )
 
 with dai.Pipeline(device) as pipeline:
-    monoLeft = (
-        pipeline.create(dai.node.Camera)
-        .build(dai.CameraBoardSocket.CAM_B)
-        .requestOutput((640, 400), type=dai.ImgFrame.Type.NV12)
+    det_model_description = dai.NNModelDescription.fromYamlFile(
+        f"pothole_2.{platform}.yaml"
     )
-    monoRight = (
-        pipeline.create(dai.node.Camera)
-        .build(dai.CameraBoardSocket.CAM_C)
-        .requestOutput((640, 400), type=dai.ImgFrame.Type.NV12)
-    )
+    det_model_nn_archive = dai.NNArchive(dai.getModelFromZoo(det_model_description))
+    nn_size = det_model_nn_archive.getInputSize()
+
+    # camera input
+    cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+
+    left_cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B)
+    right_cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C)
 
     stereo = pipeline.create(dai.node.StereoDepth).build(
-        monoLeft, monoRight, presetMode=dai.node.StereoDepth.PresetMode.HIGH_DETAIL
+        left=left_cam.requestOutput(nn_size),
+        right=right_cam.requestOutput(nn_size),
+        presetMode=dai.node.StereoDepth.PresetMode.HIGH_DETAIL,
     )
+    stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
+    if platform == "RVC2":
+        stereo.setOutputSize(*nn_size)
+    stereo.setLeftRightCheck(True)
+    stereo.setRectification(True)
 
     # Enable spatial and temporal filtering to smooth the depth map and reduce noise
     config = stereo.initialConfig
@@ -45,6 +55,16 @@ with dai.Pipeline(device) as pipeline:
     config.postProcessing.temporalFilter.enable = True
     config.postProcessing.temporalFilter.alpha = 0.4
     config.postProcessing.temporalFilter.delta = 20
+
+    nn = pipeline.create(dai.node.SpatialDetectionNetwork).build(
+        input=cam,
+        stereo=stereo,
+        nnArchive=det_model_nn_archive,
+    )
+    if platform == "RVC2":
+        nn.setNNArchive(det_model_nn_archive, numShaves=7)
+    nn.setBoundingBoxScaleFactor(0.7)
+
     depth_color_transform = pipeline.create(ApplyDepthColormap).build(stereo.disparity)
     depth_color_transform.setColormap(cv2.COLORMAP_JET)
 
@@ -53,6 +73,7 @@ with dai.Pipeline(device) as pipeline:
     pothole_detector = pipeline.create(PotholeDetector).build(
         disparity_frames=depth_color_transform.out,
         depth_frames=stereo.depth,
+        detections=nn.out,
     )
 
     visualizer.addTopic("Pothole Details", pothole_detector.passthrough)

@@ -21,11 +21,11 @@ Since asphalt and concrete can sometimes lack distinct visual features, the IR d
 3. **Enable IR Capabilities:** Configure the Device to activate the IR dot projector and flood light to ensure accurate depth mapping on the street surface.
 4. **Configure Stereo Depth Node:** Set up the `StereoDepth` node. Enable spatial and temporal filtering to smooth the depth map and reduce noise.
 
-### Phase 2: Detection and Measurement
+### Phase 2: AI Detection and Spatial Measurement
 
-5. **Establish Road Baseline:** Continuously calculate the average depth of the flat road surface in the frame. Since the camera points straight down, the majority of the frame will represent this baseline distance.
-6. **Detect Potholes:** Identify regions of interest (ROIs) where the depth values are significantly higher (further away) than the baseline road surface. This can be done using depth contouring, thresholding, or a Spatial Detection Network if a trained AI model is preferred.
-7. **Measure Pothole Depth:** For each detected ROI, calculate the relative depth by subtracting the baseline road distance from the maximum depth value found inside the pothole.
+5. **AI Pothole Detection:** Use a pre-trained Neural Network (e.g., YOLO or MobileNet) adapted for pothole object detection. We will implement a `SpatialDetectionNetwork` node (like `YoloSpatialDetectionNetwork`), feeding it the RGB/Mono stream to visually identify the pothole boundaries.
+6. **Establish Road Baseline:** Calculate the median depth of the flat road surface in the frame. We can sample depth values from areas _outside_ the AI's detected pothole bounding boxes to ensure a highly accurate flat-road baseline.
+7. **Measure Pothole Severity Metrics:** Use the bounding box provided by the AI to isolate the pothole's region in the depth map. Calculate the _maximum depth_ inside this bounding box and subtract the road baseline to find the true depth of the pothole.
 
 ### Phase 3: Analysis and Output
 
