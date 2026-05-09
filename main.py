@@ -65,6 +65,26 @@ with dai.Pipeline(device) as pipeline:
         nn.setNNArchive(det_model_nn_archive, numShaves=7)
     nn.setBoundingBoxScaleFactor(0.7)
 
+    # Secondary visualization (RGB + AI Boxes)
+    from utils.annotation_node import AnnotationNode
+
+    classes = det_model_nn_archive.getConfig().model.heads[0].metadata.classes
+    annotation_node = pipeline.create(AnnotationNode).build(
+        input_detections=nn.out, depth=stereo.depth, labels=classes
+    )
+
+    # Encode the RGB Camera explicitly for streaming
+    cam_nv12 = cam.requestOutput(
+        size=nn_size,
+        type=dai.ImgFrame.Type.NV12,
+    )
+    video_encoder = pipeline.create(dai.node.VideoEncoder)
+    video_encoder.setMaxOutputFrameSize(nn_size[0] * nn_size[1] * 3)
+    video_encoder.setDefaultProfilePreset(
+        30, dai.VideoEncoderProperties.Profile.H264_MAIN
+    )
+    cam_nv12.link(video_encoder.input)
+
     depth_color_transform = pipeline.create(ApplyDepthColormap).build(stereo.disparity)
     depth_color_transform.setColormap(cv2.COLORMAP_JET)
 
@@ -78,6 +98,10 @@ with dai.Pipeline(device) as pipeline:
 
     visualizer.addTopic("Pothole Details", pothole_detector.passthrough)
     visualizer.addTopic("Spatial Calculations", pothole_detector.annotation_output)
+
+    # Adding secondary visualization for RGB + pure Object Detection
+    visualizer.addTopic("RGB Camera", video_encoder.out)
+    visualizer.addTopic("Detections overlay", annotation_node.out_annotations)
 
     print("Pipeline created.")
     pipeline.start()
