@@ -49,7 +49,7 @@ The application builds a robust DepthAI pipeline focusing on high-accuracy depth
 
 This pipeline leverages custom model configurations for pothole object detection:
 
-- **`pothole_2`**: A specially trained model adapted for identifying pothole edges from a straight-down perspective. This is used by default in `main.py`.
+- **`pothole_2`**: A specially trained model adapted for identifying pothole edges from a straight-down perspective. This is used by default in `main.py`. [hugging face model](https://huggingface.co/cazzz307/Pothole-Finetuned-YoloV8)
 - **`yolov6`**: Additional YOLO object detection models (`yolov6_nano_r2_coco`) are provided for basic standard detection references and comparisons.
 
 The application leverages the Luxonis Model Zoo capabilities, resolving the actual model weights automatically during pipeline initialization using the yaml definition files (`dai.NNModelDescription.fromYamlFile`).
