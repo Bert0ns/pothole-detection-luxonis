@@ -39,10 +39,10 @@ The application builds a robust DepthAI pipeline focusing on high-accuracy depth
    - The central RGB camera feeds the neural network and provides the visualization stream.
 3. **Stereo Depth with Filtering**: High-detail preset is enabled, along with Spatial and Temporal filtering configurations to smooth the depth map and reduce noise.
 4. **Spatial Detection Network**: A pre-trained object detection neural network recognizes the 2D bounding boxes of potholes and incorporates the depth map.
-5. **Custom Host Node (`PotholeDetector`)**:
-   - Calculates a flat-road baseline depth by sampling the median depth of the remaining surface (excluding detected pothole bounding boxes).
-   - Iterates through detected potholes, extracting the max depth within each bounding box.
-   - Compares the max pothole depth against the flat-road baseline to calculate true depth, mapping it to a 1-10 Severity Score.
+5. **Depth Masking & Plane Fitting**:
+   - For every detected pothole, the depth frame is isolated, and bounding boxes are evaluated to filter noisy pixels using a 3x3 median filter.
+   - We fit a 3D plane (`z = a*x + b*y + c`) to the road pixels *outside* the pothole bounding box using Least Squares. This provides an accurate predicted baseline road depth underneath the center of the pothole, accounting for road slopes or uneven camera mounting.
+   - We extract the 95th percentile depth inside the pothole's bounding box (to ignore noise spikes) and compare it against the modeled plane baseline to measure true physical depth.
 6. **Video Encoder**: Streams the annotated RGB and Depth components.
 
 ## Custom / Retrained Models
