@@ -25,6 +25,9 @@ This project utilizes spatial AI to detect potholes on street surfaces, accurate
    python main.py
    ```
    _(Alternatively, you can run this as an OAK App using the provided `oakapp.toml` and `oakctl`)_
+   
+  **Kill the app**
+  lsof -ti :8082 -ti :8765 | xargs kill -9 2>/dev/null && pkill -f "python3 main.py" 2>/dev/null; echo "done"
 
 ## DepthAI Pipeline
 
