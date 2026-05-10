@@ -4,7 +4,15 @@
 
 This project was developed during the weekend-long [GDG AI HACK 2026](https://gdgaihack.com/). Specifically, it was created for the [Luxonis "See Beyond" track](https://gdgaihack.com/guidebook/tracks/luxonis), which challenged participants to solve practical real-world vision problems utilizing on-device spatial AI and the Luxonis OAK 4 D camera.
 
+
+
 This project utilizes spatial AI to detect potholes on street surfaces, accurately measure their depth, and assign a severity score. It uses an OAK 4 PRO camera mounted perpendicular (pointing straight down) to the road. This simplifies detection by using the flat street surface as a consistent depth baseline.
+
+## Presentation Video
+
+<video src="docs/GDGHackathon-2026.mp4" controls="controls" style="max-width: 100%;">
+  Your browser does not support the video tag.
+</video>
 
 ## Setup Instructions
 
